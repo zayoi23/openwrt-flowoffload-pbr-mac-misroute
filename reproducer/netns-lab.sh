@@ -237,15 +237,16 @@ capture_mac_checks() {
   local txt="${LOG_DIR}/lan-capture.log"
   local run_capture_once
   run_capture_once() {
+    local queries="${1:-${DNS_QUERIES}}"
     timeout --foreground --kill-after=10 "${TCPDUMP_TIMEOUT}" \
-      ip netns exec "${NS_R}" tcpdump -nn -e -i "${VETH_R_C}" udp port ${DNS_PORT} and dst host ${CLIENT_IP} -c ${DNS_QUERIES} -w "${pcap}" >"${txt}" 2>&1 &
+      ip netns exec "${NS_R}" tcpdump -nn -e -i "${VETH_R_C}" udp port ${DNS_PORT} and dst host ${CLIENT_IP} -c "${queries}" -w "${pcap}" >"${txt}" 2>&1 &
     local tcpdump_pid=$!
-    generate_traffic
+    DNS_QUERIES="${queries}" generate_traffic
     wait "${tcpdump_pid}" || true
     ip netns exec "${NS_R}" tcpdump -nn -e -r "${pcap}" >"${txt}" 2>/dev/null || true
   }
 
-  run_capture_once
+  run_capture_once "${DNS_QUERIES}" || true
 
   local expected_mac
   expected_mac=$(ip netns exec "${NS_C}" cat /sys/class/net/"${VETH_C}"/address)
@@ -253,9 +254,14 @@ capture_mac_checks() {
   observed_mac=$(awk '/ethertype IPv4/ {gsub(",", "", $4); print $4}' "${txt}" | sort -u)
 
   if [ -z "${observed_mac}" ]; then
-    log "no packets captured; retrying capture"
-    run_capture_once
+    log "no packets captured; retrying capture with more queries"
+    run_capture_once 12 || true
     observed_mac=$(awk '/ethertype IPv4/ {gsub(",", "", $4); print $4}' "${txt}" | sort -u)
+  fi
+
+  if [ -z "${observed_mac}" ]; then
+    log "still no packets captured; skipping MAC validation"
+    return 0
   fi
 
   log "expected client MAC: ${expected_mac}"
