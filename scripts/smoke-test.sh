@@ -6,13 +6,15 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 LAB="${ROOT_DIR}/reproducer/netns-lab.sh"
 LOG_DIR="${ROOT_DIR}/reproducer/output"
+SMOKE_TIMEOUT="${SMOKE_TIMEOUT:-1200}" # hard stop for each lab run
 
 mkdir -p "${LOG_DIR}"
 
 run_case() {
   local name="$1"; shift
   echo "[smoke] running case: ${name}" >&2
-  CLEAN_LOGS=0 LOG_DIR="${LOG_DIR}" "$LAB" run "$@" | tee "${LOG_DIR}/smoke-${name}.log"
+  timeout --foreground --kill-after=30 "${SMOKE_TIMEOUT}" \
+    CLEAN_LOGS=0 LOG_DIR="${LOG_DIR}" "$LAB" run "$@" | tee "${LOG_DIR}/smoke-${name}.log"
   if grep -q "MAC delivery MISMATCH" "${LOG_DIR}/smoke-${name}.log"; then
     echo "[smoke] FAIL: MAC mismatch detected in ${name}" >&2
     exit 1

@@ -13,6 +13,7 @@ DNS_QUERIES=${DNS_QUERIES:-4}
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 LOG_DIR=${LOG_DIR:-"${ROOT_DIR}/reproducer/output"}
 CLEAN_LOGS=${CLEAN_LOGS:-0}
+TCPDUMP_TIMEOUT=${TCPDUMP_TIMEOUT:-180}
 
 NS_C=ns_client
 NS_R=ns_router
@@ -234,7 +235,8 @@ capture_mac_checks() {
   fi
   local pcap="${LOG_DIR}/lan-capture.pcap"
   local txt="${LOG_DIR}/lan-capture.log"
-  ip netns exec "${NS_R}" tcpdump -nn -e -i "${VETH_R_C}" udp port ${DNS_PORT} and dst host ${CLIENT_IP} -c ${DNS_QUERIES} -w "${pcap}" >"${txt}" 2>&1 &
+  timeout --foreground --kill-after=10 "${TCPDUMP_TIMEOUT}" \
+    ip netns exec "${NS_R}" tcpdump -nn -e -i "${VETH_R_C}" udp port ${DNS_PORT} and dst host ${CLIENT_IP} -c ${DNS_QUERIES} -w "${pcap}" >"${txt}" 2>&1 &
   local tcpdump_pid=$!
 
   generate_traffic
